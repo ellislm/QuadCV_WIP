@@ -15,11 +15,13 @@ int iHighV = 255;
 int iRadius = 5;
 
 const int MAX_NUM_OBJECTS = 50;
+
 struct marker
 {
   int x, y;
   int area;
-}
+};
+
 string intToString(int number)
 {
 
@@ -50,7 +52,10 @@ void drawCrosshair(vector<marker> markerVec, Mat &frame)
   for(int i = 0; i<markerVec.size(); i++)
   {
     int x = markerVec.at(i).x;
-    circle(frame,Point(x,y),iRadius,Scalar(0,255,0),2);
+    int y = markerVec.at(i).y;
+    int radius = sqrt(markerVec.at(i).area/pi);
+    
+    circle(frame,Point(x,y),radius,Scalar(0,255,0),2);
     putText(frame,intToString(x)+","+intToString(y),Point(x,y),1,1,Scalar(0,255,0),2);
   }
 }
@@ -68,7 +73,7 @@ void morphOps(Mat &imgThresholded)
 void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 {
 	int x,y;
-
+	vector<marker> markerVec;
 	Mat temp;
 	threshold.copyTo(temp);
 	//these two vectors needed for output of findContours
@@ -84,7 +89,7 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 		//if number of objects greater than MAX_NUM_OBJECTS we have a noisy filter
 		if(numObjects<MAX_NUM_OBJECTS){
 			for (int index = 0; index >= 0; index = hierarchy[index][0]) {
-
+				marker marktemp;
 				Moments moment = moments((cv::Mat)contours[index]);
 				double area = moment.m00;
 
@@ -94,8 +99,10 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 				//iteration and compare it to the area in the next iteration.
 				if(area>iRadius*iRadius)
         {
-					x = moment.m10/area;
-					y = moment.m01/area;
+					marktemp.x = moment.m10/area;
+					marktemp.y = moment.m01/area;
+					marktemp.area = area;
+					markerVec.push_back(marktemp)
 					objectFound = true;
 				}
         else objectFound = false;
@@ -105,7 +112,7 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 			if(objectFound ==true)
       {
 			//draw object location on screen
-			drawCrosshair(x,y,cameraFeed);
+			drawCrosshair(markerVec,cameraFeed);
       }
 
 		}else putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
