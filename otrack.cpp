@@ -6,16 +6,20 @@ using namespace std;
 using namespace cv;
 
 
-int iLowH = 0;
-int iHighH = 179;
+int iLowH = 245;
+int iHighH = 255;
 int iLowS = 0;
 int iHighS = 255;
 int iLowV = 0;
 int iHighV = 255;
+int iRadius = 5;
 
 const int MAX_NUM_OBJECTS = 50;
-const int MIN_OBJECT_AREA = 20*20;
-
+struct marker
+{
+  int x, y;
+  int area;
+}
 string intToString(int number)
 {
 
@@ -29,20 +33,26 @@ void createWindows()
 
   namedWindow("Control", CV_WINDOW_AUTOSIZE);
 
-  cvCreateTrackbar("LowH", "Control", &iLowH, 179);//Hue(0-179)
-  cvCreateTrackbar("HighH","Control", &iHighH, 179);
+  cvCreateTrackbar("LowR", "Control", &iLowH, 255);//Red(0-255)
+  cvCreateTrackbar("HighR","Control", &iHighH, 255);
 
-  cvCreateTrackbar("LowS", "Control", &iLowS, 255);//Saturation(0-255)
-  cvCreateTrackbar("HighS","Control", &iHighS, 255);
+  cvCreateTrackbar("LowG", "Control", &iLowS, 255);//Green(0-255)
+  cvCreateTrackbar("HighGS","Control", &iHighS, 255);
 
-  cvCreateTrackbar("LowV", "Control", &iLowV, 255);//Value(0-255)
-  cvCreateTrackbar("HighV","Control", &iHighV, 255);
-  return;
+  cvCreateTrackbar("LowB", "Control", &iLowV, 255);//Green(0-255)
+  cvCreateTrackbar("HighB","Control", &iHighV, 255);
+
+  cvCreateTrackbar("Radius","Control",&iRadius,20);
+   return;
 }
-void drawCrosshair(int x, int y,int obj_radius, Mat &frame)
+void drawCrosshair(vector<marker> markerVec, Mat &frame)
 {
-  circle(frame,Point(x,y),obj_radius,Scalar(0,255,0),2);
-  putText(frame,intToString(x)+","+intToString(y),Point(x,y+30),1,1,Scalar(0,255,0),2);
+  for(int i = 0; i<markerVec.size(); i++)
+  {
+    int x = markerVec.at(i).x;
+    circle(frame,Point(x,y),iRadius,Scalar(0,255,0),2);
+    putText(frame,intToString(x)+","+intToString(y),Point(x,y),1,1,Scalar(0,255,0),2);
+  }
 }
 
 void morphOps(Mat &imgThresholded)
@@ -57,7 +67,6 @@ void morphOps(Mat &imgThresholded)
 }
 void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 {
-
 	int x,y;
 
 	Mat temp;
@@ -83,23 +92,20 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 				//if the area is the same as the 3/2 of the image size, probably just a bad filter
 				//we only want the object with the largest area so we safe a reference area each
 				//iteration and compare it to the area in the next iteration.
-				if(area>MIN_OBJECT_AREA){
+				if(area>iRadius*iRadius)
+        {
 					x = moment.m10/area;
 					y = moment.m01/area;
-
-				
-
 					objectFound = true;
-
-				}else objectFound = false;
-
+				}
+        else objectFound = false;
 
 			}
 			//let user know you found an object
 			if(objectFound ==true)
       {
-				//draw object location on screen
-			drawCrosshair(x,y,20,cameraFeed);
+			//draw object location on screen
+			drawCrosshair(x,y,cameraFeed);
       }
 
 		}else putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
@@ -127,25 +133,23 @@ int main(int argc, char** argv)
 
   while (true)
   {
-  if(waitKey())
-  {
     bSuccess = cap.read(imgOriginal);
-  }
+
     if (!bSuccess) //break loop if not successful
     {
       cout << "Cannot read a frame from video stream" << endl;
       break;
     }
 
-    cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV);
+    cvtColor(imgOriginal, imgHSV, COLOR_BGR2RGB);
 
     inRange(imgHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), imgThresholded);
     morphOps(imgThresholded);
 
+   // imshow("HSV Image",imgHSV);
+    trackFilteredObject(imgThresholded,imgHSV, imgOriginal);
     imshow("Thresholded Image", imgThresholded); //show thresholded image
     imshow("Original",imgOriginal);//show original image
-    imshow("HSV Image",imgHSV);
-    trackFilteredObject(imgThresholded,imgHSV, imgOriginal);
     if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
       cout << "esc key pressed by user" << endl;
