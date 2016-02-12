@@ -108,8 +108,7 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 
 int main(int argc, char** argv)
 {
-  VideoCapture cap(0);
-
+  VideoCapture cap("quadvid.avi");
     Mat imgThresholded;
     Mat imgHSV;
     Mat imgOriginal;
@@ -123,12 +122,15 @@ int main(int argc, char** argv)
   cap.set(CV_CAP_PROP_FPS, 60); //setting capture fps to 60
 
   createWindows();
+  //grabbing first frame of video
+  bool bSuccess = cap.read(imgOriginal);
 
   while (true)
   {
-
-    bool bSuccess = cap.read(imgOriginal);
-
+  if(waitKey())
+  {
+    bSuccess = cap.read(imgOriginal);
+  }
     if (!bSuccess) //break loop if not successful
     {
       cout << "Cannot read a frame from video stream" << endl;
@@ -151,7 +153,7 @@ int main(int argc, char** argv)
     }
 
   }
-
+  
   return 0;
 
 }
