@@ -5,15 +5,19 @@
 using namespace std;
 using namespace cv;
 
+bool CalibrateMode = true;
 
-int iLowH = 245;
-int iHighH = 255;
-int iLowS = 0;
-int iHighS = 255;
-int iLowV = 0;
-int iHighV = 255;
-int iRadius = 5;
+int iLowR = 0;
+int iHighR = 179; 
+int iLowG = 100;
+int iHighG = 255;
+int iLowB = 100;
+int iHighB = 255;
+int minRadius = 5;
 
+Mat imgOriginal;
+
+const float pi = 3.14159;
 const int MAX_NUM_OBJECTS = 50;
 
 struct marker
@@ -30,21 +34,65 @@ string intToString(int number)
   return ss.str();
 
 }
+static void onMouse( int event, int x, int y, int f, void* )
+{
+ Mat image=imgOriginal.clone();
+ Vec3b rgb=image.at<Vec3b>(y,x);
+ int B=rgb.val[0];
+ int G=rgb.val[1];
+ int R=rgb.val[2];
+
+  Mat HSV;
+  Mat RGB=image(Rect(x,y,1,1));
+  cvtColor(RGB, HSV,CV_BGR2HSV);
+
+    Vec3b hsv=HSV.at<Vec3b>(0,0);
+    int H=hsv.val[0];
+    int S=hsv.val[1];
+    int V=hsv.val[2];
+
+    char name[30];
+    sprintf(name,"B=%d",B);
+    putText(image,name, Point(150,40) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,255,0), 2,8,false );
+
+    sprintf(name,"G=%d",G);
+    putText(image,name, Point(150,80) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,255,0), 2,8,false );
+
+    sprintf(name,"R=%d",R);
+    putText(image,name, Point(150,120) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,255,0), 2,8,false );
+
+    sprintf(name,"H=%d",H);
+    putText(image,name, Point(25,40) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,255,0), 2,8,false );
+
+    sprintf(name,"S=%d",S);
+    putText(image,name, Point(25,80) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,255,0), 2,8,false );
+
+    sprintf(name,"V=%d",V);
+    putText(image,name, Point(25,120) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,255,0), 2,8,false );
+
+    sprintf(name,"X=%d",x);
+    putText(image,name, Point(25,300) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,0,255), 2,8,false );
+
+    sprintf(name,"Y=%d",y);
+    putText(image,name, Point(25,340) , FONT_HERSHEY_SIMPLEX, .7, Scalar(0,0,255), 2,8,false );
+    imshow("Original",image);//show original image
+}
+ //imwrite("hsv.jpg",image);
 void createWindows()
 {
 
   namedWindow("Control", CV_WINDOW_AUTOSIZE);
 
-  cvCreateTrackbar("LowR", "Control", &iLowH, 255);//Red(0-255)
-  cvCreateTrackbar("HighR","Control", &iHighH, 255);
+  cvCreateTrackbar("LowR", "Control", &iLowR, 179);//Red(0-255)
+  cvCreateTrackbar("HighR","Control", &iHighR, 179);
 
-  cvCreateTrackbar("LowG", "Control", &iLowS, 255);//Green(0-255)
-  cvCreateTrackbar("HighGS","Control", &iHighS, 255);
+  cvCreateTrackbar("LowG", "Control", &iLowG, 255);//Green(0-255)
+  cvCreateTrackbar("HighGS","Control", &iHighG, 255);
 
-  cvCreateTrackbar("LowB", "Control", &iLowV, 255);//Green(0-255)
-  cvCreateTrackbar("HighB","Control", &iHighV, 255);
+  cvCreateTrackbar("LowB", "Control", &iLowB, 255);//Green(0-255)
+  cvCreateTrackbar("HighB","Control", &iHighB, 255);
 
-  cvCreateTrackbar("Radius","Control",&iRadius,20);
+  cvCreateTrackbar("Radius","Control",&minRadius,20);
    return;
 }
 void drawCrosshair(vector<marker> markerVec, Mat &frame)
@@ -63,17 +111,17 @@ void drawCrosshair(vector<marker> markerVec, Mat &frame)
 void morphOps(Mat &imgThresholded)
 {
   //morphological openings (remove small objects from the foreground)
-  erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5,5)));
-  dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5,5)));
+  erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(minRadius,minRadius)));
+  dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(minRadius,minRadius)));
 
   //morphological closings (fill small holes in the foreground)
-  dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5,5)));
-  erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5,5)));
+  dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(minRadius,minRadius)));
+  erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(minRadius,minRadius)));
 }
-void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
+void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> &markerVec)
 {
 	int x,y;
-	vector<marker> markerVec;
+//	vector<marker> markerVec;
 	Mat temp;
 	threshold.copyTo(temp);
 	//these two vectors needed for output of findContours
@@ -97,12 +145,12 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 				//if the area is the same as the 3/2 of the image size, probably just a bad filter
 				//we only want the object with the largest area so we safe a reference area each
 				//iteration and compare it to the area in the next iteration.
-				if(area>iRadius*iRadius)
+				if(area>minRadius*minRadius)
         {
 					marktemp.x = moment.m10/area;
 					marktemp.y = moment.m01/area;
 					marktemp.area = area;
-					markerVec.push_back(marktemp)
+					markerVec.push_back(marktemp);
 					objectFound = true;
 				}
         else objectFound = false;
@@ -112,7 +160,7 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed)
 			if(objectFound ==true)
       {
 			//draw object location on screen
-			drawCrosshair(markerVec,cameraFeed);
+//			drawCrosshair(markerVec,cameraFeed);
       }
 
 		}else putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
@@ -124,7 +172,8 @@ int main(int argc, char** argv)
   VideoCapture cap("quadvid.avi");
     Mat imgThresholded;
     Mat imgHSV;
-    Mat imgOriginal;
+    Mat upperRed;
+//    Mat imgOriginal;
 
   if (!cap.isOpened())
   {
@@ -140,23 +189,32 @@ int main(int argc, char** argv)
 
   while (true)
   {
-    bSuccess = cap.read(imgOriginal);
-
+    vector<marker> markerVec;
+    if(waitKey())
+    {
+        bSuccess = cap.read(imgOriginal);
     if (!bSuccess) //break loop if not successful
     {
       cout << "Cannot read a frame from video stream" << endl;
       break;
     }
-
-    cvtColor(imgOriginal, imgHSV, COLOR_BGR2RGB);
-
-    inRange(imgHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), imgThresholded);
+  } 
+    cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV);
+  //  upperRed = imgHSV.clone();
+    inRange(imgHSV, Scalar(0, iLowG, iLowB), Scalar(10, iHighG, iHighB), imgThresholded);
     morphOps(imgThresholded);
+    trackFilteredObject(imgThresholded,imgHSV, imgOriginal, markerVec);
+    inRange(imgHSV, Scalar(160, iLowB), Scalar(179, iHighG, iHighB),imgThresholded);
 
-   // imshow("HSV Image",imgHSV);
-    trackFilteredObject(imgThresholded,imgHSV, imgOriginal);
+    morphOps(imgThresholded);
+    trackFilteredObject(imgThresholded,imgHSV, imgOriginal,markerVec);
+  
+	  drawCrosshair(markerVec,imgOriginal);
+    imshow("HSV Image",imgHSV);
+
     imshow("Thresholded Image", imgThresholded); //show thresholded image
     imshow("Original",imgOriginal);//show original image
+    setMouseCallback("Original",onMouse, 0);
     if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
       cout << "esc key pressed by user" << endl;
@@ -164,7 +222,7 @@ int main(int argc, char** argv)
     }
 
   }
-  
+
   return 0;
 
 }
