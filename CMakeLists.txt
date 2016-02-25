@@ -3,4 +3,6 @@ project( CaptureImage )
 find_package( OpenCV REQUIRED )
 add_executable( CaptureImage otrack.cpp )
 target_link_libraries( CaptureImage ${OpenCV_LIBS} )
+add_executable( RGBCap otrackRGB.cpp )
+target_link_libraries( RGBCap ${OpenCV_LIBS} )
 
