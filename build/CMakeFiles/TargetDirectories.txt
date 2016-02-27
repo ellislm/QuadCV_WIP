@@ -1,0 +1,2 @@
+/home/pi/opencv_ws/QuadCV_WIP/build/CMakeFiles/CaptureImage.dir
+/home/pi/opencv_ws/QuadCV_WIP/build/CMakeFiles/RGBCap.dir

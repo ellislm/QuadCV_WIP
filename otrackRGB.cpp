@@ -14,6 +14,9 @@ int iHighG = 255;
 int iLowB = 100;
 int iHighB = 255;
 int minRadius = 5;
+double l_mean = 260;
+ofstream logfile.txt;
+//vector<double> x_store, y_store;
 
 Mat imgOriginal;
 
@@ -166,6 +169,87 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> 
 		}else putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
 	}
 }
+void matLabCode(vector<marker> mVec)
+{
+  int bin_cntr = 1;
+  int length = mVec.size();
+  vector<double> l;
+//  vector<double> xs;
+//  vector<double> ys;
+  Mat qLocP (1,2,CV_32F);
+  Mat pRed(1,2,CV_32F);
+  Mat eP(1,1,CV_32F);
+  Mat qLoc(1,1,CV_32F);
+
+  Mat workMat(1,2, CV_32F);//used for temp calculations
+
+double l_sum;
+  for (int i = 0; i < l.size(); i++)
+  {
+    if(l[i]< l_mean*1.3 && l[i] > l_mean*0.7)
+    {
+      l_sum = l_sum+l[i]; 
+      bin_cntr++;
+    }
+  }
+  l_mean = l_sum/bin_cntr;
+  for(int i = 0; i<length; i++)
+  {
+        workMat.at(1) = qLoc.at(1) + ((myVec[i].x - x_pix)/l_mean)*cos(qLoc.at(4)) - ((myVec[i].y - y_pix)/l_mean)*sin(qLoc.at(4));
+        workMat.at(2) = qLoc.at(2) + ((myVec[i].y - y_pix)/l_mean)*sin(qLoc.at(4)) + ((centroidRed(i,2) - y_pix)/l_mean)*cos(qLoc.at(4));
+        pRed.push_back(workMat);
+        
+        workMat.at(1) = round(pRed.at(i,1)); % correct marker locations
+        workMat.at(2) = round(pRed.at(i,2)); % correct marker locations
+        pRed2.pushBack(workMat);
+
+        rgbFrame = step(htextinsCent, rgbFrame, [uint16(pRed(i,1)) uint16(pRed(i,2))], [myVec[i].x myVec[i].y]);
+        
+        eP.push_back(sqrt((pRed(i,1) - pRed2(i,1))^2+(pRed(i,1) - pRed2(i,1))^2));
+        qLocP(i,1) = pRed2(i,1) - ((myVec[i].x - x_pix)/l_mean)*cos(qLoc.at(4)) + ((myVec[i].y - y_pix)/l_mean)*sin(qLoc.at(4));
+        qLocP(i,2) = pRed2(i,2) - ((myVec[i].y - y_pix)/l_mean)*sin(qLoc.at(4)) - ((centroidRed(i,2) - y_pix)/l_mean)*cos(qLoc.at(4));        
+        
+        qLocPsum(1) = qLocPsum(1) + (1/eP(i)) * qLocP(i,1);
+        qLocPsum(2) = qLocPsum(2) + (1/eP(i)) * qLocP(i,2);
+        ePsum = ePsum + (1/eP(i));
+    }
+    e_m(nFrame) = mean(eP(:));
+    
+    flag = 1;
+    clear angvar
+    for i=1:length(pRed2)
+        for j=1:length(pRed2)
+            if pRed2(i,1) == pRed2(j,1) + 1 && pRed2(i,2) == pRed2(j,2) % is i 1 unit vertical above j
+                dx = pRed(i,1) - pRed(j,1);
+                dy = pRed(i,2) - pRed(j,2);
+                dxx(flag) = dx;
+                dyy(flag) = dy;
+                inds_i(flag) = i;
+                inds_j(flag) = j;
+                angvar(flag) = atan2(-dy,dx)*180/pi
+                flag = flag + 1;
+            }
+            if pRed2(i,2) == pRed2(j,2) + 1 && pRed2(i,1) == pRed2(j,1) % is i 1 unit vertical above j
+                dx = myVec[i].x - myVec[j].x;
+                dy = myVec[i].y - myVec[j].y;
+                angvar(flag) = atan2(dx,dy)*180/pi;
+                flag = flag + 1;
+            }            
+        }
+    }
+   
+    qLocP;
+    eP';
+    qLoc.at(1) = qLocPsum(1) / ePsum;
+    qLoc.at(2) = qLocPsum(2) / ePsum;
+    qLoc.at(3) = 322.5806*1/l_mean;
+    qLoc.at(4) = median(angvar)*pi/180;
+    qLoc'
+  for(int i = 0; i<length; i++)
+  {
+   workMat.at(i,1)= qLoc[1]*((mVec[i].x  
+  }
+}
 
 int main(int argc, char** argv)
 {
@@ -195,7 +279,7 @@ int main(int argc, char** argv)
         bSuccess = cap.read(imgOriginal);
     if (!bSuccess) //break loop if not successful
     {
-      cout << "Cannot read a frame from video stream" << endl;
+      cout << "Cannot read a frame from video stream" << }endl;
       break;
     }
   } 
@@ -213,12 +297,12 @@ int main(int argc, char** argv)
     setMouseCallback("Original",onMouse, 0);
     if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
-      cout << "esc key pressed by user" << endl;
+      cout << "esc key pressed by user" << }endl;
       break;
     }
 
   }
 
   return 0;
-
+  
 }
