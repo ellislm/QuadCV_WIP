@@ -1,4 +1,5 @@
 #include<iostream>
+#include<fstream>
 #include<opencv2/highgui/highgui.hpp>
 #include<opencv2/imgproc/imgproc.hpp>
 
@@ -7,15 +8,21 @@ using namespace cv;
 
 bool CalibrateMode = true;
 const float pi = 3.14159;
-int iLowR = 0;
+//the following are initial values for RGB filtering
+int iLowR = 253;
 int iHighR = 255; 
-int iLowG = 100;
+int iLowG = 0;
 int iHighG = 255;
-int iLowB = 100;
+int iLowB = 0;
 int iHighB = 255;
-int minRadius = 5;
+int minRadius = 3;
+int maxRadius = 30;
 double l_mean = 260;
-//vector<double> x_store, y_store;
+
+ofstream logfile; //initializing log file
+
+//Establishing matrices for use in matlab code
+
 double phimat[8][8] = 
 {
   { 1, 1, 0, 0, 0,0, 0, 0,},
@@ -37,20 +44,24 @@ double hmat[4][8] =
 double zmat[4];
 double r = 0.25;
 double qLocmat[4] = {9.7, 10.5,1.4,-5/360*pi};
+
 Mat imgOriginal;
+
 int x_pix=640;
 int y_pix = 480;
 int frame_rate=60;
+
 Mat_<double>x(1,3);
 Mat_<double>v(1,3);
+
 const int MAX_NUM_OBJECTS = 50;
 
+//Object used to represent markers
 struct marker
 {
   int x, y;
   int area;
 };
-
 string intToString(int number)
 {
   std::stringstream ss;
@@ -128,16 +139,17 @@ void createWindows()
 
   namedWindow("Control", CV_WINDOW_AUTOSIZE);
 
-  cvCreateTrackbar("LowR", "Control", &iLowR, 255);//Red(0-255)
-  cvCreateTrackbar("HighR","Control", &iHighR, 255);
+  cvCreateTrackbar("Red Min", "Control", &iLowR, 255);//Red(0-255)
+  cvCreateTrackbar("Red Max","Control", &iHighR, 255);
 
-  cvCreateTrackbar("LowG", "Control", &iLowG, 255);//Green(0-255)
-  cvCreateTrackbar("HighGS","Control", &iHighG, 255);
+  cvCreateTrackbar("Green Min", "Control", &iLowG, 255);//Green(0-255)
+  cvCreateTrackbar("Green Max","Control", &iHighG, 255);
 
-  cvCreateTrackbar("LowB", "Control", &iLowB, 255);//Green(0-255)
-  cvCreateTrackbar("HighB","Control", &iHighB, 255);
+  cvCreateTrackbar("Blue Min", "Control", &iLowB, 255);//Green(0-255)
+  cvCreateTrackbar("Blue Max","Control", &iHighB, 255);
 
-  cvCreateTrackbar("Radius","Control",&minRadius,20);
+  cvCreateTrackbar("Radius Min","Control",&minRadius,30);
+  cvCreateTrackbar("Radius Max","Control",&maxRadius,30);
    return;
 }
 void drawCrosshair(vector<marker> markerVec, Mat &frame)
@@ -189,7 +201,7 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> 
 				//if the area is the same as the 3/2 of the image size, probably just a bad filter
 				//we only want the object with the largest area so we safe a reference area each
 				//iteration and compare it to the area in the next iteration.
-				if(area>minRadius*minRadius)
+				if((area > pi*minRadius*minRadius) && (area < pi*maxRadius*maxRadius))
         {
 					marktemp.x = moment.m10/area;
 					marktemp.y = moment.m01/area;
@@ -200,12 +212,6 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> 
         else objectFound = false;
 
 			}
-			//let user know you found an object
-			if(objectFound ==true)
-      {
-			//draw object location on screen
-//			drawCrosshair(markerVec,cameraFeed);
-      }
 
 		}else putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
 	}
@@ -314,9 +320,11 @@ void matLabCode(vector<marker> mVec)
     qLoc(2) = xh(4) + xh(5)*1/frame_rate;
     qLoc(3) = xh(6) + xh(7)*1/frame_rate;
     double temp[3] = {qLoc(0),qLoc(1),qLoc(2)};
-    x.push_back(Mat_<double>(1,3, temp));
-    double duh[3] = {xh(1), xh(3), xh(5)};
-    v.push_back(Mat_<double>(1,3,duh));
+    //x.push_back(Mat_<double>(1,3, temp));
+    //double duh[3] = {xh(1), xh(3), xh(5)};
+    //v.push_back(Mat_<double>(1,3,duh));
+    logfile << qLoc(0) << "," << qLoc(1) << "," << qLoc(2) << ","
+      << xh(1) << "," << xh(3) << "," << xh(5) << endl;
 }
 int main(int argc, char** argv)
 {
@@ -325,6 +333,7 @@ int main(int argc, char** argv)
     Mat imgHSV;
     Mat upperRed;
 //    Mat imgOriginal;
+  logfile.open("data.csv");
 
   if (!cap.isOpened())
   { 
@@ -341,15 +350,17 @@ int main(int argc, char** argv)
   while (true)
   {
     vector<marker> markerVec;
-    if(waitKey())
-    {
-        bSuccess = cap.read(imgOriginal);
+    bSuccess = cap.read(imgOriginal);
+    //if(waitKey())
+    //{
+        //bSuccess = cap.read(imgOriginal);
     if (!bSuccess) //break loop if not successful
     {
       cout << "Cannot read a frame from video stream" << endl;
+      logfile.close();
       break;
     }
-    } 
+   // } 
     cvtColor(imgOriginal, imgHSV, COLOR_BGR2RGB);
   //  upperRed = imgHSV.clone();
     inRange(imgHSV, Scalar(iLowR, iLowB), Scalar(iHighR, iHighG, iHighB),imgThresholded);
@@ -357,15 +368,17 @@ int main(int argc, char** argv)
     trackFilteredObject(imgThresholded,imgHSV, imgOriginal,markerVec);
 
 	  drawCrosshair(markerVec,imgOriginal);
-    imshow("HSV Image",imgHSV);
-
-    imshow("Thresholded Image", imgThresholded); //show thresholded image
+    matLabCode(markerVec);
+    //The next line previously showed thresholded image, not necessary with marker crosshairs
+//    imshow("Thresholded Image", imgThresholded); //show thresholded image
     imshow("Original",imgOriginal);//show original image
-    setMouseCallback("Original",onMouse, 0);
+    setMouseCallback("Original",onMouse, 0);//Used to print color info on screen under mouse cursor
     if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
       cout << "esc key pressed by user" << endl;
+      logfile.close();
       break;
+
     }
 
   }
