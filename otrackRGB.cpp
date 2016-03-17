@@ -23,23 +23,23 @@ ofstream logfile; //initializing log file
 
 //Establishing matrices for use in matlab code
 
-double phimat[8][8] = 
+double phimat[64] = 
 {
-  { 1, 1, 0, 0, 0,0, 0, 0,},
-  { 0, 1, 0, 0, 0,0, 0, 0,},
-  { 0, 0, 1, 1, 0,0, 0, 0,},
-  { 0, 0, 0, 1, 0,0, 0, 0,},
-  { 0, 0, 0, 0, 1,1, 0, 0,},
-  { 0, 0, 0, 0, 0,1, 0, 0,},
-  { 0, 0, 0, 0, 0,0, 1, 1,},
-  { 0, 0, 0, 0, 0,0, 0, 1,},
+   1, 1, 0, 0, 0,0, 0, 0,
+   0, 1, 0, 0, 0,0, 0, 0,
+   0, 0, 1, 1, 0,0, 0, 0,
+   0, 0, 0, 1, 0,0, 0, 0,
+   0, 0, 0, 0, 1,1, 0, 0,
+   0, 0, 0, 0, 0,1, 0, 0,
+   0, 0, 0, 0, 0,0, 1, 1,
+   0, 0, 0, 0, 0,0, 0, 1,
   };
-double hmat[4][8] =
+double hmat[32] =
 {
-  {1, 0, 0, 0, 0, 0, 0, 0, },
-  {0, 0, 1, 0, 0, 0, 0, 0, },
-  {0, 0, 0, 0, 1, 0, 0, 0, },
-  {0, 0, 0, 0, 0, 0, 1, 0, },
+  1, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 1, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 1, 0,
 };
 double zmat[4];
 double r = 0.25;
@@ -67,29 +67,6 @@ string intToString(int number)
   std::stringstream ss;
   ss << number;
   return ss.str();
-}
-double median( cv::Mat channel )
-{
-		double m = (channel.rows*channel.cols) / 2;
-		int bin = 0;
-		double med = -1.0;
-
-		int histSize = 256;
-		float range[] = { 0, 256 };
-		const float* histRange = { range };
-		bool uniform = true;
-		bool accumulate = false;
-		cv::Mat hist;
-		cv::calcHist( &channel, 1, 0, cv::Mat(), hist, 1, &histSize, &histRange, uniform, accumulate );
-
-		for ( int i = 0; i < histSize && med < 0.0; ++i )
-		{
-				bin += cvRound( hist.at< float >( i ) );
-				if ( bin > m && med < 0.0 )
-						med = i;
-		}
-
-		return med;
 }
 static void onMouse( int event, int x, int y, int f, void* )
 {
@@ -176,7 +153,6 @@ void morphOps(Mat &imgThresholded)
 }
 void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> &markerVec)
 {
-	int x,y;
 //	vector<marker> markerVec;
 	Mat temp;
 	threshold.copyTo(temp);
@@ -216,6 +192,15 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> 
 		}else putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
 	}
 }
+double median(Mat Input)
+{    
+Input = Input.reshape(0,1); // spread Input Mat to single row
+vector<double> vecFromMat;
+Input.copyTo(vecFromMat); // Copy Input Mat to vector vecFromMat
+std::nth_element(vecFromMat.begin(), vecFromMat.begin() + vecFromMat.size() / 2, vecFromMat.end());
+return vecFromMat[vecFromMat.size() / 2];
+}
+
 void matLabCode(vector<marker> mVec)
 {
   int bin_cntr = 1;
@@ -248,6 +233,7 @@ void matLabCode(vector<marker> mVec)
     }
   }
   l_mean = l_sum/bin_cntr;
+
   for(int i = 0; i<length; i++)
   {
         workMat(1) = qLoc(1) + ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(4)) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4));
@@ -257,20 +243,19 @@ void matLabCode(vector<marker> mVec)
         workMat(1) = round(pRed(i,1));// % correct marker locations
         workMat(2) = round(pRed(i,2));// % correct marker locations
         pRed2.push_back(workMat);
-
   //      rgbFrame = step(htextinsCent, rgbFrame, [uint16(pRed(i,1)) uint16(pRed(i,2))], [mVec[i].x mVec[i].y]);
         
         eP.push_back(sqrt((pRed(i,1) - pRed2(i,1))*(pRed(i,1) - pRed2(i,1))+
                           (pRed(i,1) - pRed2(i,1))*(pRed(i,1) - pRed2(i,1))));
-        qLocP(i,1) = pRed2(i,1) - ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(4)) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4));
-        qLocP(i,2) = pRed2(i,2) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4)) - ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(4));        
-        
+        workMat(1) = pRed2(i,1) - ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(4)) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4));
+        workMat(2) = pRed2(i,2) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4)) - ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(4));        
+        qLocP.push_back(workMat); 
         qLocPsum(1) = qLocPsum(1) + (1/eP(i)) * qLocP(i,1);
         qLocPsum(2) = qLocPsum(2) + (1/eP(i)) * qLocP(i,2);
         ePsum = ePsum + (1/eP(i));
     }
 
-		Mat angvar(1,1,CV_32F);
+		Mat_<double> angvar(1,1);
     double dx;
     double dy;
     for(int i=0; i < pRed2.rows; i++)
@@ -286,7 +271,6 @@ void matLabCode(vector<marker> mVec)
                 dx = mVec[i].x - mVec[j].x;
                 dy = mVec[i].y - mVec[j].y;
                 angvar.push_back(atan2(dx,dy)*180/pi);
-
             }
       }
     }
@@ -295,17 +279,21 @@ void matLabCode(vector<marker> mVec)
     qLoc(1) = qLocPsum(1) / ePsum;
     qLoc(2) = qLocPsum(2) / ePsum;
     qLoc(3) = 322.5806*1/l_mean;
-    qLoc(4) = median(angvar)*pi/180;
+    qLoc(4) = median(angvar)*pi/180; 
     qLoc = qLoc.t();
 
-    Mat h = Mat(4,8, CV_32F, &hmat);
-    Mat phi = Mat(8,8, CV_32F, &phimat);
+    Mat_<double> h = Mat(4,8,CV_64F, &hmat);
+    Mat_<double> phi = Mat(8,8,CV_64F, &phimat);
+    Mat num = pm*h.t();
+    Mat denom = h*pm*h.t() + r;
 
-		Mat ka = pm*h.t()/(h*pm*h.t() + r); for(int i = 0; i < qLocP.rows; i++)
+		Mat_<double> ka = num*denom.inv(DECOMP_LU); 
+    for(int i = 0; i < qLocP.rows; i++)
     {
       zmat[0] = zmat[0] + qLocP(i,1)/qLocP.rows;
       zmat[1] = zmat[1] + qLocP(i,2)/qLocP.rows;
     }
+    
     zmat[2] = 322.5806/l_mean;
     zmat[3] = qLoc(4);
     Mat_<double> z(1,4,zmat);
@@ -325,6 +313,7 @@ void matLabCode(vector<marker> mVec)
     //v.push_back(Mat_<double>(1,3,duh));
     logfile << qLoc(0) << "," << qLoc(1) << "," << qLoc(2) << ","
       << xh(1) << "," << xh(3) << "," << xh(5) << endl;
+    
 }
 int main(int argc, char** argv)
 {
@@ -334,7 +323,6 @@ int main(int argc, char** argv)
     Mat upperRed;
 //    Mat imgOriginal;
   logfile.open("data.csv");
-
   if (!cap.isOpened())
   { 
     cout<<"Cannot load camera"<< endl;
@@ -350,17 +338,24 @@ int main(int argc, char** argv)
   while (true)
   {
     vector<marker> markerVec;
-    bSuccess = cap.read(imgOriginal);
-    //if(waitKey())
-    //{
-        //bSuccess = cap.read(imgOriginal);
-    if (!bSuccess) //break loop if not successful
+    if(argc > 1)
+    {
+    if(waitKey() && string(argv[1]) == "-log")
+    {
+        bSuccess = cap.read(imgOriginal);
+    }
+    }
+    else
+    {
+       bSuccess = cap.read(imgOriginal);
+    }
+       if (!bSuccess) //break loop if not successful
     {
       cout << "Cannot read a frame from video stream" << endl;
       logfile.close();
       break;
     }
-   // } 
+     
     cvtColor(imgOriginal, imgHSV, COLOR_BGR2RGB);
   //  upperRed = imgHSV.clone();
     inRange(imgHSV, Scalar(iLowR, iLowB), Scalar(iHighR, iHighG, iHighB),imgThresholded);
