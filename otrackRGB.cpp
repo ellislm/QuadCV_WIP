@@ -15,7 +15,7 @@ int iLowG = 0;
 int iHighG = 255;
 int iLowB = 0;
 int iHighB = 255;
-int minRadius = 3;
+int minRadius = 4;
 int maxRadius = 30;
 double l_mean = 260;
 
@@ -276,7 +276,7 @@ double zmat[4];
     {
       for (int j=0;i < pRed2.rows; i++)
       {
-        if (pRed2(i,0) == pRed2(j,0) + 1 && pRed2(i,1) == pRed2(j,0)){
+        if (pRed2(i,0) == pRed2(j,0) + 1 && pRed2(i,1) == pRed2(j,1)){
                 dx = pRed(i,0) - pRed(j,0);
                 dy = pRed(i,1) - pRed(j,1);
                 angvar.push_back(atan2(-dy,dx)*180/pi);
@@ -295,6 +295,7 @@ double zmat[4];
     qLoc(2) = 322.5806/l_mean;
     qLoc(3) = median(angvar)*pi/180; 
     qLoc = qLoc.t();
+    cout<<angvar<<endl<<median(angvar)<<endl;
     Mat_<double> h = Mat(4,8,CV_64F, &hmat);
     Mat_<double> phi = Mat(8,8,CV_64F, &phimat);
     Mat num = pm*h.t();
@@ -306,9 +307,9 @@ double zmat[4];
       zmat[0] = zmat[0] + qLocP(i,0)/qLocP.rows;
       zmat[1] = zmat[1] + qLocP(i,1)/qLocP.rows;
     }
-    
+
     zmat[2] = 322.5806/l_mean;
-    zmat[3] = qLoc(4);
+    zmat[3] = qLoc(3);
     Mat_<double> z(1,4,zmat);
     z = z.t();
 		Mat_<double> xh = xm+ka*(z-h*xm);
@@ -322,7 +323,6 @@ double zmat[4];
     //x.push_back(Mat_<double>(1,3, temp));
     //double duh[3] = {xh(1), xh(3), xh(5)};
     //v.push_back(Mat_<double>(1,3,duh));
-    cout<<qLoc<<endl;
     logfile << qLoc(0) << "," << qLoc(1) << "," << qLoc(2) << ","
       << xh(1) << "," << xh(3) << "," << xh(5) << endl;
     
