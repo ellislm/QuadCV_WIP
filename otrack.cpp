@@ -8,13 +8,16 @@ using namespace cv;
 bool CalibrateMode = true;
 
 int iLowR = 0;
-int iHighR = 179; 
-int iLowG = 100;
+int iHighR = 10; 
+int iLowR2 = 170;
+int iHighR2 = 179; 
+int iLowG = 68;
 int iHighG = 255;
-int iLowB = 100;
+int iLowB = 200;
 int iHighB = 255;
-int minRadius = 5;
 
+int minRadius = 2;
+int maxRadius = 15;
 Mat imgOriginal;
 
 const float pi = 3.14159;
@@ -86,13 +89,17 @@ void createWindows()
   cvCreateTrackbar("LowR", "Control", &iLowR, 179);//Red(0-255)
   cvCreateTrackbar("HighR","Control", &iHighR, 179);
 
-  cvCreateTrackbar("LowG", "Control", &iLowG, 255);//Green(0-255)
-  cvCreateTrackbar("HighGS","Control", &iHighG, 255);
+  cvCreateTrackbar("LowR2", "Control", &iLowR2, 179);//Red(0-255)
+  cvCreateTrackbar("HighR2","Control", &iHighR2, 179);
 
-  cvCreateTrackbar("LowB", "Control", &iLowB, 255);//Green(0-255)
-  cvCreateTrackbar("HighB","Control", &iHighB, 255);
+  cvCreateTrackbar("LowS", "Control", &iLowG, 255);//Green(0-255)
+  cvCreateTrackbar("HighS","Control", &iHighG, 255);
 
-  cvCreateTrackbar("Radius","Control",&minRadius,20);
+  cvCreateTrackbar("LowV", "Control", &iLowB, 255);//Green(0-255)
+  cvCreateTrackbar("HighV","Control", &iHighB, 255);
+
+  cvCreateTrackbar("Radius Min","Control",&minRadius,30);
+  cvCreateTrackbar("Radius Max","Control",&maxRadius,30);
    return;
 }
 void drawCrosshair(vector<marker> markerVec, Mat &frame)
@@ -145,7 +152,7 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> 
 				//if the area is the same as the 3/2 of the image size, probably just a bad filter
 				//we only want the object with the largest area so we safe a reference area each
 				//iteration and compare it to the area in the next iteration.
-				if(area>minRadius*minRadius)
+				if((area > pi*minRadius*minRadius) && (area < pi*maxRadius*maxRadius))
         {
 					marktemp.x = moment.m10/area;
 					marktemp.y = moment.m01/area;
@@ -172,6 +179,7 @@ int main(int argc, char** argv)
   VideoCapture cap("quadvid.avi");
     Mat imgThresholded;
     Mat imgHSV;
+    Mat lowerRed;
     Mat upperRed;
 //    Mat imgOriginal;
 
@@ -201,15 +209,24 @@ int main(int argc, char** argv)
   } 
     cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV);
   //  upperRed = imgHSV.clone();
-    inRange(imgHSV, Scalar(0, iLowG, iLowB), Scalar(10, iHighG, iHighB), imgThresholded);
+    inRange(imgHSV, Scalar(iLowR, iLowG, iLowB), Scalar(iHighR, iHighG, iHighB), lowerRed);
+    inRange(imgHSV, Scalar(iLowR2, iLowB), Scalar(iHighR2, iHighG, iHighB),upperRed);
+    addWeighted(lowerRed,1.0,upperRed,1.0,0.0,imgThresholded);
     morphOps(imgThresholded);
-    trackFilteredObject(imgThresholded,imgHSV, imgOriginal, markerVec);
-    inRange(imgHSV, Scalar(160, iLowB), Scalar(179, iHighG, iHighB),imgThresholded);
-
-    morphOps(imgThresholded);
-    trackFilteredObject(imgThresholded,imgHSV, imgOriginal,markerVec);
-  
-	  drawCrosshair(markerVec,imgOriginal);
+//    GaussianBlur(imgThresholded, imgThresholded, Size(9,9),2,2);
+    vector<Vec3f> circles;
+    HoughCircles(imgThresholded, circles, CV_HOUGH_GRADIENT, 1, 30, 200, 5,minRadius,maxRadius);
+    if(circles.size() != 0){
+    for(size_t current_circle = 0; current_circle < circles.size(); current_circle++)
+    {
+      Point center(round(circles[current_circle][0]),round(circles[current_circle][1]));
+    int radius = round(circles[current_circle][2]);
+    circle(imgOriginal, center, radius, Scalar(0,255,0),5);
+    }
+    }
+    // trackFilteredObject(imgThresholded,imgHSV, imgOriginal,markerVec);
+ 
+	 // drawCrosshair(markerVec,imgOriginal);
     imshow("HSV Image",imgHSV);
 
     imshow("Thresholded Image", imgThresholded); //show thresholded image

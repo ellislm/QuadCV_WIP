@@ -1,4 +1,5 @@
 #include<iostream>
+#include<fstream>
 #include<opencv2/highgui/highgui.hpp>
 #include<opencv2/imgproc/imgproc.hpp>
 
@@ -7,78 +8,67 @@ using namespace cv;
 
 bool CalibrateMode = true;
 const float pi = 3.14159;
-int iLowR = 0;
+//the following are initial values for RGB filtering
+int iLowR = 250;
 int iHighR = 255; 
-int iLowG = 100;
+int iLowG = 0;
 int iHighG = 255;
-int iLowB = 100;
+int iLowB = 0;
 int iHighB = 255;
-int minRadius = 5;
+int minRadius = 4;
+int maxRadius = 30;
 double l_mean = 260;
-//vector<double> x_store, y_store;
-double phimat[8][8] = 
+
+ofstream logfile; //initializing log file
+
+//Establishing matrices for use in matlab code
+
+double phimat[64] = 
 {
-  { 1, 1, 0, 0, 0,0, 0, 0,},
-  { 0, 1, 0, 0, 0,0, 0, 0,},
-  { 0, 0, 1, 1, 0,0, 0, 0,},
-  { 0, 0, 0, 1, 0,0, 0, 0,},
-  { 0, 0, 0, 0, 1,1, 0, 0,},
-  { 0, 0, 0, 0, 0,1, 0, 0,},
-  { 0, 0, 0, 0, 0,0, 1, 1,},
-  { 0, 0, 0, 0, 0,0, 0, 1,},
+   1, 1, 0, 0, 0,0, 0, 0,
+   0, 1, 0, 0, 0,0, 0, 0,
+   0, 0, 1, 1, 0,0, 0, 0,
+   0, 0, 0, 1, 0,0, 0, 0,
+   0, 0, 0, 0, 1,1, 0, 0,
+   0, 0, 0, 0, 0,1, 0, 0,
+   0, 0, 0, 0, 0,0, 1, 1,
+   0, 0, 0, 0, 0,0, 0, 1,
   };
-double hmat[4][8] =
+double hmat[32] =
 {
-  {1, 0, 0, 0, 0, 0, 0, 0, },
-  {0, 0, 1, 0, 0, 0, 0, 0, },
-  {0, 0, 0, 0, 1, 0, 0, 0, },
-  {0, 0, 0, 0, 0, 0, 1, 0, },
+  1, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 1, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 1, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 1, 0,
 };
-double zmat[4];
 double r = 0.25;
 double qLocmat[4] = {9.7, 10.5,1.4,-5/360*pi};
+
+Mat_<double> qLoc(1,4, qLocmat);
 Mat imgOriginal;
+
 int x_pix=640;
 int y_pix = 480;
 int frame_rate=60;
+
 Mat_<double>x(1,3);
 Mat_<double>v(1,3);
+
+	double xmmatdata[8] = {10, 0, 10, 0, 1.4, 0, 0, 0};
+	Mat_<double> xm(1,8,xmmatdata);
 const int MAX_NUM_OBJECTS = 50;
 
+//Object used to represent markers
 struct marker
 {
   int x, y;
   int area;
 };
-
 string intToString(int number)
 {
   std::stringstream ss;
   ss << number;
   return ss.str();
-}
-double median( cv::Mat channel )
-{
-		double m = (channel.rows*channel.cols) / 2;
-		int bin = 0;
-		double med = -1.0;
-
-		int histSize = 256;
-		float range[] = { 0, 256 };
-		const float* histRange = { range };
-		bool uniform = true;
-		bool accumulate = false;
-		cv::Mat hist;
-		cv::calcHist( &channel, 1, 0, cv::Mat(), hist, 1, &histSize, &histRange, uniform, accumulate );
-
-		for ( int i = 0; i < histSize && med < 0.0; ++i )
-		{
-				bin += cvRound( hist.at< float >( i ) );
-				if ( bin > m && med < 0.0 )
-						med = i;
-		}
-
-		return med;
 }
 static void onMouse( int event, int x, int y, int f, void* )
 {
@@ -128,16 +118,17 @@ void createWindows()
 
   namedWindow("Control", CV_WINDOW_AUTOSIZE);
 
-  cvCreateTrackbar("LowR", "Control", &iLowR, 255);//Red(0-255)
-  cvCreateTrackbar("HighR","Control", &iHighR, 255);
+  cvCreateTrackbar("Red Min", "Control", &iLowR, 255);//Red(0-255)
+  cvCreateTrackbar("Red Max","Control", &iHighR, 255);
 
-  cvCreateTrackbar("LowG", "Control", &iLowG, 255);//Green(0-255)
-  cvCreateTrackbar("HighGS","Control", &iHighG, 255);
+  cvCreateTrackbar("Green Min", "Control", &iLowG, 255);//Green(0-255)
+  cvCreateTrackbar("Green Max","Control", &iHighG, 255);
 
-  cvCreateTrackbar("LowB", "Control", &iLowB, 255);//Green(0-255)
-  cvCreateTrackbar("HighB","Control", &iHighB, 255);
+  cvCreateTrackbar("Blue Min", "Control", &iLowB, 255);//Green(0-255)
+  cvCreateTrackbar("Blue Max","Control", &iHighB, 255);
 
-  cvCreateTrackbar("Radius","Control",&minRadius,20);
+  cvCreateTrackbar("Radius Min","Control",&minRadius,30);
+  cvCreateTrackbar("Radius Max","Control",&maxRadius,30);
    return;
 }
 void drawCrosshair(vector<marker> markerVec, Mat &frame)
@@ -164,7 +155,6 @@ void morphOps(Mat &imgThresholded)
 }
 void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> &markerVec)
 {
-	int x,y;
 //	vector<marker> markerVec;
 	Mat temp;
 	threshold.copyTo(temp);
@@ -189,7 +179,7 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> 
 				//if the area is the same as the 3/2 of the image size, probably just a bad filter
 				//we only want the object with the largest area so we safe a reference area each
 				//iteration and compare it to the area in the next iteration.
-				if(area>minRadius*minRadius)
+				if((area > pi*minRadius*minRadius) && (area < pi*maxRadius*maxRadius))
         {
 					marktemp.x = moment.m10/area;
 					marktemp.y = moment.m01/area;
@@ -200,123 +190,142 @@ void trackFilteredObject(Mat threshold,Mat HSV, Mat &cameraFeed, vector<marker> 
         else objectFound = false;
 
 			}
-			//let user know you found an object
-			if(objectFound ==true)
-      {
-			//draw object location on screen
-//			drawCrosshair(markerVec,cameraFeed);
-      }
 
 		}else putText(cameraFeed,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
 	}
 }
+double median(Mat Input)
+{    
+Input = Input.reshape(0,1); // spread Input Mat to single row
+vector<double> vecFromMat;
+Input.copyTo(vecFromMat); // Copy Input Mat to vector vecFromMat
+std::nth_element(vecFromMat.begin(), vecFromMat.begin() + vecFromMat.size() / 2, vecFromMat.end());
+return vecFromMat[vecFromMat.size() / 2];
+}
+
 void matLabCode(vector<marker> mVec)
 {
-  int bin_cntr = 1;
+  double bin_cntr = 1;
   int length = mVec.size();
   vector<double> l;
-//  vector<double> xs;
+  l_mean = 260;
+  //  vector<double> xs;
 //  vector<double> ys;
   Mat_<double> qLocP(1,2);
   Mat_<double> pRed(1,2);
   Mat_<double> pRed2(1,2);
   Mat_<double> eP(1,1);
-  Mat_<double> qLoc(1,4, qLocmat);
   Mat_<double> qLocPsum(1,2);
 	Mat_<double> pm = Mat_<double>::eye(8, 8);
   Mat_<double> workMat(1,2);//used for temp calculations
+  Mat_<double> zeros(1,2);
+  zeros(0) = 0;
+  zeros(1) = 0;
+double zmat[4];
   double ePsum;
 
-	double xmmatdata[8] = {10, 0, 10, 0, 1.4, 0, 0, 0};
-	Mat_<double> xm(1,8,xmmatdata);
-	xm = xm.t();
 	Mat_<double> q = pm.clone()*0.1;
 
 	double l_sum;
+
+  for (int i = 0; i < length; i++)
+  {
+    for(int j = i+1; j<length; j++)
+    {
+      l.push_back(sqrt(pow((mVec[i].x - mVec[j].x),2) + pow((mVec[i].y - mVec[j].y),2)));
+    }
+  }
+
   for (int i = 0; i < l.size(); i++)
   {
-    if(l[i]< l_mean*1.3 && l[i] > l_mean*0.7)
+    if((l[i]< l_mean*1.3) && (l[i] > l_mean*0.7))
     {
       l_sum = l_sum+l[i]; 
       bin_cntr++;
     }
   }
   l_mean = l_sum/bin_cntr;
+  qLocPsum(0) = 0; qLocPsum(1) = 0;
   for(int i = 0; i<length; i++)
   {
-        workMat(1) = qLoc(1) + ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(4)) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4));
-        workMat(2) = qLoc(2) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4)) + ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(4));
-        pRed.push_back(workMat);
-        
-        workMat(1) = round(pRed(i,1));// % correct marker locations
-        workMat(2) = round(pRed(i,2));// % correct marker locations
-        pRed2.push_back(workMat);
-
+        pRed(i,0) = qLoc(0) + ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(3)) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3));
+        pRed(i,1) = qLoc(1) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3)) + ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(3));
+        pRed2(i,0) = round(pRed(i,0));// % correct marker locations
+        pRed2(i,1) = round(pRed(i,1));// % correct marker locations
   //      rgbFrame = step(htextinsCent, rgbFrame, [uint16(pRed(i,1)) uint16(pRed(i,2))], [mVec[i].x mVec[i].y]);
         
-        eP.push_back(sqrt((pRed(i,1) - pRed2(i,1))*(pRed(i,1) - pRed2(i,1))+
+        eP.push_back(sqrt((pRed(i,0) - pRed2(i,0))*(pRed(i,0) - pRed2(i,0))+
                           (pRed(i,1) - pRed2(i,1))*(pRed(i,1) - pRed2(i,1))));
-        qLocP(i,1) = pRed2(i,1) - ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(4)) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4));
-        qLocP(i,2) = pRed2(i,2) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4)) - ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(4));        
-        
+        eP(i) = eP(i+1);
+        qLocP(i,0) = pRed2(i,0) - ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(3)) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3));
+        qLocP(i,1) = pRed2(i,1) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3)) - ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(3));        
+        qLocPsum(0) = qLocPsum(0) + (1/eP(i)) * qLocP(i,0);
         qLocPsum(1) = qLocPsum(1) + (1/eP(i)) * qLocP(i,1);
-        qLocPsum(2) = qLocPsum(2) + (1/eP(i)) * qLocP(i,2);
         ePsum = ePsum + (1/eP(i));
+        if(i!= length - 1)
+        {
+        pRed.push_back(zeros);
+        pRed2.push_back(zeros);
+        qLocP.push_back(zeros); 
+        }
     }
-
-		Mat angvar(1,1,CV_32F);
+		Mat_<double> angvar(1,1);
     double dx;
     double dy;
     for(int i=0; i < pRed2.rows; i++)
     {
       for (int j=0;i < pRed2.rows; i++)
       {
-        if (pRed2(i,1) == pRed2(j,1) + 1 && pRed2(i,2) == pRed2(j,2)){
-                dx = pRed(i,1) - pRed(j,1);
-                dy = pRed(i,2) - pRed(j,2);
+        if (pRed2(i,0) == pRed2(j,0) + 1 && pRed2(i,1) == pRed2(j,1)){
+                dx = pRed(i,0) - pRed(j,0);
+                dy = pRed(i,1) - pRed(j,1);
                 angvar.push_back(atan2(-dy,dx)*180/pi);
             }
-            if (pRed2(i,2) == pRed2(j,2) + 1 && pRed2(i,1) == pRed2(j,1)){
+            if (pRed2(i,1) == pRed2(j,1) + 1 && pRed2(i,0) == pRed2(j,0)){
                 dx = mVec[i].x - mVec[j].x;
                 dy = mVec[i].y - mVec[j].y;
                 angvar.push_back(atan2(dx,dy)*180/pi);
-
             }
       }
     }
 
     eP = eP.t();
+    qLoc(0) = qLocPsum(0) / ePsum;
     qLoc(1) = qLocPsum(1) / ePsum;
-    qLoc(2) = qLocPsum(2) / ePsum;
-    qLoc(3) = 322.5806*1/l_mean;
-    qLoc(4) = median(angvar)*pi/180;
+    qLoc(2) = 322.5806/l_mean;
+    qLoc(3) = median(angvar)*pi/180; 
     qLoc = qLoc.t();
+    cout<<angvar<<endl<<median(angvar)<<endl;
+    Mat_<double> h = Mat(4,8,CV_64F, &hmat);
+    Mat_<double> phi = Mat(8,8,CV_64F, &phimat);
+    Mat num = pm*h.t();
+    Mat denom = h*pm*h.t() + r;
 
-    Mat h = Mat(4,8, CV_32F, &hmat);
-    Mat phi = Mat(8,8, CV_32F, &phimat);
-
-		Mat ka = pm*h.t()/(h*pm*h.t() + r); for(int i = 0; i < qLocP.rows; i++)
+		Mat_<double> ka = num*denom.inv(DECOMP_LU); 
+    for(int i = 0; i < qLocP.rows; i++)
     {
-      zmat[0] = zmat[0] + qLocP(i,1)/qLocP.rows;
-      zmat[1] = zmat[1] + qLocP(i,2)/qLocP.rows;
+      zmat[0] = zmat[0] + qLocP(i,0)/qLocP.rows;
+      zmat[1] = zmat[1] + qLocP(i,1)/qLocP.rows;
     }
+
     zmat[2] = 322.5806/l_mean;
-    zmat[3] = qLoc(4);
+    zmat[3] = qLoc(3);
     Mat_<double> z(1,4,zmat);
     z = z.t();
 		Mat_<double> xh = xm+ka*(z-h*xm);
     Mat_<double> p = Mat_<double>::eye(8,8); 
     xm = phi*xh;
     pm = phi*p*phi.t()+q;
-    
     qLoc(0) = xh(0) + xh(1)*1/frame_rate;
-    qLoc(1) = xh(2) + xh(3)*1/frame_rate;
+   qLoc(1) = xh(2) + xh(3)*1/frame_rate;
     qLoc(2) = xh(4) + xh(5)*1/frame_rate;
     qLoc(3) = xh(6) + xh(7)*1/frame_rate;
-    double temp[3] = {qLoc(0),qLoc(1),qLoc(2)};
-    x.push_back(Mat_<double>(1,3, temp));
-    double duh[3] = {xh(1), xh(3), xh(5)};
-    v.push_back(Mat_<double>(1,3,duh));
+    //x.push_back(Mat_<double>(1,3, temp));
+    //double duh[3] = {xh(1), xh(3), xh(5)};
+    //v.push_back(Mat_<double>(1,3,duh));
+    logfile << qLoc(0) << "," << qLoc(1) << "," << qLoc(2) << ","
+      << xh(1) << "," << xh(3) << "," << xh(5) << endl;
+    
 }
 int main(int argc, char** argv)
 {
@@ -325,13 +334,14 @@ int main(int argc, char** argv)
     Mat imgHSV;
     Mat upperRed;
 //    Mat imgOriginal;
-
+  logfile.open("data.csv");
   if (!cap.isOpened())
   { 
     cout<<"Cannot load camera"<< endl;
     return -1;
   }
 
+	xm = xm.t();
 	cap.set(CV_CAP_PROP_FPS, 60); //setting capture fps to 60
 
   createWindows();
@@ -341,15 +351,24 @@ int main(int argc, char** argv)
   while (true)
   {
     vector<marker> markerVec;
-    if(waitKey())
+    if(argc > 1)
+    {
+    if(waitKey() && string(argv[1]) == "-log")
     {
         bSuccess = cap.read(imgOriginal);
-    if (!bSuccess) //break loop if not successful
+    }
+    }
+    else
+    {
+       bSuccess = cap.read(imgOriginal);
+    }
+       if (!bSuccess) //break loop if not successful
     {
       cout << "Cannot read a frame from video stream" << endl;
+      logfile.close();
       break;
     }
-    } 
+     
     cvtColor(imgOriginal, imgHSV, COLOR_BGR2RGB);
   //  upperRed = imgHSV.clone();
     inRange(imgHSV, Scalar(iLowR, iLowB), Scalar(iHighR, iHighG, iHighB),imgThresholded);
@@ -357,15 +376,17 @@ int main(int argc, char** argv)
     trackFilteredObject(imgThresholded,imgHSV, imgOriginal,markerVec);
 
 	  drawCrosshair(markerVec,imgOriginal);
-    imshow("HSV Image",imgHSV);
-
-    imshow("Thresholded Image", imgThresholded); //show thresholded image
+    matLabCode(markerVec);
+    //The next line previously showed thresholded image, not necessary with marker crosshairs
+//    imshow("Thresholded Image", imgThresholded); //show thresholded image
     imshow("Original",imgOriginal);//show original image
-    setMouseCallback("Original",onMouse, 0);
+    setMouseCallback("Original",onMouse, 0);//Used to print color info on screen under mouse cursor
     if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
       cout << "esc key pressed by user" << endl;
+      logfile.close();
       break;
+
     }
 
   }
