@@ -9,7 +9,7 @@ using namespace cv;
 bool CalibrateMode = true;
 const float pi = 3.14159;
 //the following are initial values for RGB filtering
-int iLowR = 253;
+int iLowR = 250;
 int iHighR = 255; 
 int iLowG = 0;
 int iHighG = 255;
@@ -41,10 +41,10 @@ double hmat[32] =
   0, 0, 0, 0, 1, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 1, 0,
 };
-double zmat[4];
 double r = 0.25;
 double qLocmat[4] = {9.7, 10.5,1.4,-5/360*pi};
 
+Mat_<double> qLoc(1,4, qLocmat);
 Mat imgOriginal;
 
 int x_pix=640;
@@ -54,6 +54,8 @@ int frame_rate=60;
 Mat_<double>x(1,3);
 Mat_<double>v(1,3);
 
+	double xmmatdata[8] = {10, 0, 10, 0, 1.4, 0, 0, 0};
+	Mat_<double> xm(1,8,xmmatdata);
 const int MAX_NUM_OBJECTS = 50;
 
 //Object used to represent markers
@@ -203,58 +205,70 @@ return vecFromMat[vecFromMat.size() / 2];
 
 void matLabCode(vector<marker> mVec)
 {
-  int bin_cntr = 1;
+  double bin_cntr = 1;
   int length = mVec.size();
   vector<double> l;
-//  vector<double> xs;
+  l_mean = 260;
+  //  vector<double> xs;
 //  vector<double> ys;
   Mat_<double> qLocP(1,2);
   Mat_<double> pRed(1,2);
   Mat_<double> pRed2(1,2);
   Mat_<double> eP(1,1);
-  Mat_<double> qLoc(1,4, qLocmat);
   Mat_<double> qLocPsum(1,2);
 	Mat_<double> pm = Mat_<double>::eye(8, 8);
   Mat_<double> workMat(1,2);//used for temp calculations
+  Mat_<double> zeros(1,2);
+  zeros(0) = 0;
+  zeros(1) = 0;
+double zmat[4];
   double ePsum;
 
-	double xmmatdata[8] = {10, 0, 10, 0, 1.4, 0, 0, 0};
-	Mat_<double> xm(1,8,xmmatdata);
-	xm = xm.t();
 	Mat_<double> q = pm.clone()*0.1;
 
 	double l_sum;
+
+  for (int i = 0; i < length; i++)
+  {
+    for(int j = i+1; j<length; j++)
+    {
+      l.push_back(sqrt(pow((mVec[i].x - mVec[j].x),2) + pow((mVec[i].y - mVec[j].y),2)));
+    }
+  }
+
   for (int i = 0; i < l.size(); i++)
   {
-    if(l[i]< l_mean*1.3 && l[i] > l_mean*0.7)
+    if((l[i]< l_mean*1.3) && (l[i] > l_mean*0.7))
     {
       l_sum = l_sum+l[i]; 
       bin_cntr++;
     }
   }
   l_mean = l_sum/bin_cntr;
-
+  qLocPsum(0) = 0; qLocPsum(1) = 0;
   for(int i = 0; i<length; i++)
   {
-        workMat(1) = qLoc(1) + ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(4)) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4));
-        workMat(2) = qLoc(2) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4)) + ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(4));
-        pRed.push_back(workMat);
-        
-        workMat(1) = round(pRed(i,1));// % correct marker locations
-        workMat(2) = round(pRed(i,2));// % correct marker locations
-        pRed2.push_back(workMat);
+        pRed(i,0) = qLoc(0) + ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(3)) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3));
+        pRed(i,1) = qLoc(1) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3)) + ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(3));
+        pRed2(i,0) = round(pRed(i,0));// % correct marker locations
+        pRed2(i,1) = round(pRed(i,1));// % correct marker locations
   //      rgbFrame = step(htextinsCent, rgbFrame, [uint16(pRed(i,1)) uint16(pRed(i,2))], [mVec[i].x mVec[i].y]);
         
-        eP.push_back(sqrt((pRed(i,1) - pRed2(i,1))*(pRed(i,1) - pRed2(i,1))+
+        eP.push_back(sqrt((pRed(i,0) - pRed2(i,0))*(pRed(i,0) - pRed2(i,0))+
                           (pRed(i,1) - pRed2(i,1))*(pRed(i,1) - pRed2(i,1))));
-        workMat(1) = pRed2(i,1) - ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(4)) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4));
-        workMat(2) = pRed2(i,2) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(4)) - ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(4));        
-        qLocP.push_back(workMat); 
+        eP(i) = eP(i+1);
+        qLocP(i,0) = pRed2(i,0) - ((mVec[i].x - x_pix)/l_mean)*cos(qLoc(3)) + ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3));
+        qLocP(i,1) = pRed2(i,1) - ((mVec[i].y - y_pix)/l_mean)*sin(qLoc(3)) - ((mVec[i].y - y_pix)/l_mean)*cos(qLoc(3));        
+        qLocPsum(0) = qLocPsum(0) + (1/eP(i)) * qLocP(i,0);
         qLocPsum(1) = qLocPsum(1) + (1/eP(i)) * qLocP(i,1);
-        qLocPsum(2) = qLocPsum(2) + (1/eP(i)) * qLocP(i,2);
         ePsum = ePsum + (1/eP(i));
+        if(i!= length - 1)
+        {
+        pRed.push_back(zeros);
+        pRed2.push_back(zeros);
+        qLocP.push_back(zeros); 
+        }
     }
-
 		Mat_<double> angvar(1,1);
     double dx;
     double dy;
@@ -262,12 +276,12 @@ void matLabCode(vector<marker> mVec)
     {
       for (int j=0;i < pRed2.rows; i++)
       {
-        if (pRed2(i,1) == pRed2(j,1) + 1 && pRed2(i,2) == pRed2(j,2)){
-                dx = pRed(i,1) - pRed(j,1);
-                dy = pRed(i,2) - pRed(j,2);
+        if (pRed2(i,0) == pRed2(j,0) + 1 && pRed2(i,1) == pRed2(j,0)){
+                dx = pRed(i,0) - pRed(j,0);
+                dy = pRed(i,1) - pRed(j,1);
                 angvar.push_back(atan2(-dy,dx)*180/pi);
             }
-            if (pRed2(i,2) == pRed2(j,2) + 1 && pRed2(i,1) == pRed2(j,1)){
+            if (pRed2(i,1) == pRed2(j,1) + 1 && pRed2(i,0) == pRed2(j,0)){
                 dx = mVec[i].x - mVec[j].x;
                 dy = mVec[i].y - mVec[j].y;
                 angvar.push_back(atan2(dx,dy)*180/pi);
@@ -276,12 +290,11 @@ void matLabCode(vector<marker> mVec)
     }
 
     eP = eP.t();
+    qLoc(0) = qLocPsum(0) / ePsum;
     qLoc(1) = qLocPsum(1) / ePsum;
-    qLoc(2) = qLocPsum(2) / ePsum;
-    qLoc(3) = 322.5806*1/l_mean;
-    qLoc(4) = median(angvar)*pi/180; 
+    qLoc(2) = 322.5806/l_mean;
+    qLoc(3) = median(angvar)*pi/180; 
     qLoc = qLoc.t();
-
     Mat_<double> h = Mat(4,8,CV_64F, &hmat);
     Mat_<double> phi = Mat(8,8,CV_64F, &phimat);
     Mat num = pm*h.t();
@@ -290,8 +303,8 @@ void matLabCode(vector<marker> mVec)
 		Mat_<double> ka = num*denom.inv(DECOMP_LU); 
     for(int i = 0; i < qLocP.rows; i++)
     {
-      zmat[0] = zmat[0] + qLocP(i,1)/qLocP.rows;
-      zmat[1] = zmat[1] + qLocP(i,2)/qLocP.rows;
+      zmat[0] = zmat[0] + qLocP(i,0)/qLocP.rows;
+      zmat[1] = zmat[1] + qLocP(i,1)/qLocP.rows;
     }
     
     zmat[2] = 322.5806/l_mean;
@@ -302,15 +315,14 @@ void matLabCode(vector<marker> mVec)
     Mat_<double> p = Mat_<double>::eye(8,8); 
     xm = phi*xh;
     pm = phi*p*phi.t()+q;
-    
     qLoc(0) = xh(0) + xh(1)*1/frame_rate;
-    qLoc(1) = xh(2) + xh(3)*1/frame_rate;
+   qLoc(1) = xh(2) + xh(3)*1/frame_rate;
     qLoc(2) = xh(4) + xh(5)*1/frame_rate;
     qLoc(3) = xh(6) + xh(7)*1/frame_rate;
-    double temp[3] = {qLoc(0),qLoc(1),qLoc(2)};
     //x.push_back(Mat_<double>(1,3, temp));
     //double duh[3] = {xh(1), xh(3), xh(5)};
     //v.push_back(Mat_<double>(1,3,duh));
+    cout<<qLoc<<endl;
     logfile << qLoc(0) << "," << qLoc(1) << "," << qLoc(2) << ","
       << xh(1) << "," << xh(3) << "," << xh(5) << endl;
     
@@ -329,6 +341,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
+	xm = xm.t();
 	cap.set(CV_CAP_PROP_FPS, 60); //setting capture fps to 60
 
   createWindows();
