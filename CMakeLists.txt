@@ -6,3 +6,5 @@ target_link_libraries( CaptureImage ${OpenCV_LIBS} )
 add_executable( RGBCap otrackRGB.cpp )
 target_link_libraries( RGBCap ${OpenCV_LIBS} )
 
+add_executable( quadRec quadRec.cpp )
+target_link_libraries( quadRec ${OpenCV_LIBS} )

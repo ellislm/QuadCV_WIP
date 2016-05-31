@@ -285,7 +285,7 @@ xm = xm.t();
   
   //grabbing first frame of video
   cout << "Starting Stream" << endl;
-  while (true)
+  while (frame_num < 900)
   {
     bool bSuccess = cap.read(imgOriginal);
     
@@ -319,13 +319,14 @@ xm = xm.t();
 
     }
     matLabCode(markerVec);
+    frame_num++;
     }
 //    video.write(imgOriginal);
 //    imshow("Thresholded Image", imgThresholded); //show thresholded image
     imshow("Original",imgOriginal);//show original image
     //frame_rate = CLOCKS_PER_SEC/((float)(clock() - time_previous));
     time_previous = clock();
-    if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
+    if(waitKey(30) == 27 || frame_num == 899) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
       cout << "esc key pressed by user" << endl;
       logfile.close();

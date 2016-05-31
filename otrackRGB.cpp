@@ -178,14 +178,12 @@ void matLabCode(vector<marker> mVec)
         pRed2.push_back(zeros);
         qLocP.push_back(zeros); 
         eP.push_back(zero1);
-        expMat.push_back(zeros);
          }
      }
     //cout<<"epSum"<<endl<<ePsum<<endl;
     //cout<<"qLocP"<<endl<<qLocP<<endl;
     //cout<<"qLocPsum"<<endl<<qLocPsum<<endl;
     
-  cout<<"expmat"<<endl<<expMat<<endl<<"pRed"<<endl<<pRed<<endl;
 		Mat_<double> angvar(1,1);
     double dx;
     double dy;
@@ -246,7 +244,7 @@ void matLabCode(vector<marker> mVec)
 }
 int main(int argc, char** argv)
 {
-  VideoCapture cap("quadvid.avi");
+  VideoCapture cap("quadvid.mp4");
     Mat imgThresholded;
     Mat imgHSV;
     Mat lowerRed;
@@ -314,7 +312,7 @@ int main(int argc, char** argv)
     }
 
 //    imshow("Thresholded Image", imgThresholded); //show thresholded image
-//    imshow("Original",imgOriginal);//show original image
+    imshow("Original",imgOriginal);//show original image
     if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
       cout << "esc key pressed by user" << endl;
