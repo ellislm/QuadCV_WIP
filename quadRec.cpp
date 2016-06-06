@@ -10,8 +10,8 @@ bool CalibrateMode = true;
 const float pi = 3.14159;
 //the following are initial values for RGB filtering
 int iLowR = 0;
-int iHighR = 15; 
-int iLowR2 = 165;
+int iHighR = 21; 
+int iLowR2 = 160;
 int iHighR2 = 179; 
 int iLowG = 0;
 int iHighG = 255;
@@ -175,7 +175,7 @@ void matLabCode(vector<marker> mVec)
   l_mean = l_sum/bin_cntr;
   cout<<l_mean<<endl;
  qLocPsum(0) = 0; qLocPsum(1) = 0;
-  pRed(0) = 0; pRed2(0) = 0; pRed(1) = 0; pRed(2) = 0;
+  pRed(0) = 0; pRed2(0) = 0; pRed(1) = 0; pRed2(1) = 0;
   qLocP(0) = 0; qLocP(1)=0; eP(0) = 0;
 
   for(int i = 0; i<length; i++)
@@ -239,7 +239,7 @@ void matLabCode(vector<marker> mVec)
 
     zmat[2] = 322.5806/l_mean;
     zmat[3] = qLoc(3);
-     
+
     Mat_<double> z(1,4,zmat);
     z = z.t();
 		Mat_<double> xh = xm+ka*(z-h*xm);
@@ -247,7 +247,7 @@ void matLabCode(vector<marker> mVec)
     Mat_<double> p = (eye-ka*h)*pm;
     xm = phi*xh;
     pm = phi*p*phi.t()+q;
-    
+
     qLoc(0) = xh(0) + xh(1)*1/frame_rate;
     qLoc(1) = xh(2) + xh(3)*1/frame_rate;
     qLoc(2) = xh(4) + xh(5)*1/frame_rate;
@@ -262,8 +262,7 @@ void matLabCode(vector<marker> mVec)
 }
 int main(int argc, char** argv)
 {
-   time_previous = clock();
-  VideoCapture cap("picam.avi");
+   VideoCapture cap(0);
     Mat imgThresholded;
     Mat imgHSV;
     Mat lowerRed;
