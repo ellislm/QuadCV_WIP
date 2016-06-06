@@ -10,21 +10,23 @@ bool CalibrateMode = true;
 const float pi = 3.14159;
 //the following are initial values for RGB filtering
 int iLowR = 0;
-int iHighR = 10; 
-int iLowR2 = 170;
+int iHighR = 15; 
+int iLowR2 = 165;
 int iHighR2 = 179; 
-int iLowG = 75;
+int iLowG = 0;
 int iHighG = 255;
-int iLowB = 75;
+int iLowB = 0;
 int iHighB = 255;
 int minRadius = 1;
-int maxRadius = 15;
+int maxRadius = 10;
 
-int frame_num = 0;
 
 int x_res = 320;
 int y_res = 240;
 double l_mean = x_res/2.4;
+int x_pix=x_res/2;
+int y_pix = y_res/2;
+int frame_rate=30;
 ofstream logfile; //initializing log file
 
 //Establishing matrices for use in matlab code
@@ -57,9 +59,6 @@ Mat_<double> qLoc(1,4, qLocmat);
 Mat imgOriginal;
 
 Mat_<double> eye = Mat_<double>::eye(8,8); 
-int x_pix=x_res/2;
-int y_pix = y_res/2;
-int frame_rate=30;
 clock_t time_previous;
 
 	Mat_<double> pm = Mat_<double>::eye(8,8);
@@ -264,7 +263,7 @@ void matLabCode(vector<marker> mVec)
 int main(int argc, char** argv)
 {
    time_previous = clock();
-  VideoCapture cap("quadvid.avi");
+  VideoCapture cap("picam.avi");
     Mat imgThresholded;
     Mat imgHSV;
     Mat lowerRed;
@@ -285,7 +284,7 @@ xm = xm.t();
   
   //grabbing first frame of video
   cout << "Starting Stream" << endl;
-  while (frame_num < 900)
+  while (true)
   {
     bool bSuccess = cap.read(imgOriginal);
     
@@ -304,7 +303,7 @@ xm = xm.t();
 //    GaussianBlur(imgThresholded, imgThresholded, Size(9,9),2,2);
     vector<Vec3f> circles;
     vector<marker> markerVec;
-    HoughCircles(imgThresholded, circles, CV_HOUGH_GRADIENT, 1, 100, 200,2,minRadius,maxRadius);
+    HoughCircles(imgThresholded, circles, CV_HOUGH_GRADIENT, 1, 75, 200,3,minRadius,maxRadius);
     if(circles.size() != 0){
     for(size_t current_circle = 0; current_circle < circles.size(); current_circle++)
     {
@@ -319,14 +318,13 @@ xm = xm.t();
 
     }
     matLabCode(markerVec);
-    frame_num++;
     }
 //    video.write(imgOriginal);
 //    imshow("Thresholded Image", imgThresholded); //show thresholded image
     imshow("Original",imgOriginal);//show original image
     //frame_rate = CLOCKS_PER_SEC/((float)(clock() - time_previous));
     time_previous = clock();
-    if(waitKey(30) == 27 || frame_num == 899) //wait for esc key press for 30ms, if esc key is pressed, break loop
+    if(waitKey(30) == 27) //wait for esc key press for 30ms, if esc key is pressed, break loop
     {
       cout << "esc key pressed by user" << endl;
       logfile.close();
